@@ -1,6 +1,6 @@
 # INITIALIZE 
 
-  ddir <- '/Volumes/LaCie/projects/QRNS/analysis/2015-mort/' #@REPHRASE
+  ddir <- '/put/data/directory/here/'
   setwd(ddir)
 
   library("survival")
@@ -12,25 +12,26 @@
 
 # FUNCTIONS
 
-  # binomial confidence limits
-  do.binomlimits <- function(rate, min.ctr=5, max.ctr=500) {
-    N <- seq(min.ctr, max.ctr, 1)
-    ci.99u <- qbinom(0.995, N, rate) 
-    ci.95u <- qbinom(0.975, N, rate) 
-    ci.50m <- qbinom(0.500, N, rate) 
-    ci.95l <- qbinom(0.025, N, rate) 
-    ci.99l <- qbinom(0.005, N, rate) 
-    uu <- cbind(N*rate,ci.99u, c(0,ci.99u[1:(length(ci.99u)-1)]))
-    uu <- uu[uu[,2] != uu[,3],]
-    u  <- cbind(N*rate,ci.95u, c(0,ci.95u[1:(length(ci.95u)-1)]))
-    u  <- u[u[,2] != u[,3],]
-    m  <- cbind(N*rate,ci.50m, c(0,ci.50m[1:(length(ci.50m)-1)]))
-    m  <- m[m[,2] != m[,3],]
-    l  <- cbind(N*rate,ci.95l, c(0,ci.95l[1:(length(ci.95l)-1)]))
-    l  <- l[l[,2] != l[,3],]
-    ll <- cbind(N*rate,ci.99l, c(0,ci.99l[1:(length(ci.99l)-1)]))
-    ll <- ll[ll[,2] != ll[,3],]
-    return(list(
+   # poisson confidence limits
+   do.poissonlimits <- function(rate, min.ctr=5, max.ctr=500) {
+      lambda <- seq(min.ctr, max.ctr, 1) * rate
+     ci.99u <- qpois(0.995, lambda) 
+     ci.95u <- qpois(0.975, lambda) 
+     ci.50  <- qpois(0.500, lambda)
+     ci.95l <- qpois(0.025, lambda) 
+     ci.99l <- qpois(0.005, lambda) 
+     uu <- cbind(lambda,ci.99u, c(0,ci.99u[1:(length(ci.99u)-1)]))
+     uu <- uu[uu[,2] != uu[,3],]
+     u  <- cbind(lambda,ci.95u, c(0,ci.95u[1:(length(ci.95u)-1)]))
+     u  <- u[u[,2] != u[,3],]
+     m  <- cbind(lambda,ci.50, c(0,ci.50[1:(length(ci.50)-1)]))
+     m  <- m[m[,2] != m[,3],]
+     l  <- cbind(lambda,ci.95l, c(0,ci.95l[1:(length(ci.95l)-1)]))
+     l  <- l[l[,2] != l[,3],]
+     ll <- cbind(lambda,ci.99l, c(0,ci.99l[1:(length(ci.99l)-1)]))
+     ll <- ll[ll[,2] != ll[,3],]
+
+     return(list(
       ll = cbind( E=ll[,1], SR=ll[,2]/ll[,1] ),
       l  = cbind( E= l[,1], SR= l[,2]/ l[,1] ),
       m  = cbind( E= m[,1], SR= m[,2]/ m[,1] ),
@@ -244,63 +245,25 @@
   (S_2y.lo <- sum_stanresult$summary[grepl("\\bS_2y\\b",rownames(sum_stanresult$summary)),"2.5%"])
   (S_2y.hi <- sum_stanresult$summary[grepl("\\bS_2y\\b",rownames(sum_stanresult$summary)),"97.5%"])
 
-# DETERMINE BAYESIAN PROBABILITIES
-
-  ## one month mortality
-
-  # estimate the funnel thresholds for standarized mortality for each center
-  S_1m.99u <- qbinom(0.995, V, Rhat_1m) /   (V * Rhat_1m)
-  S_1m.95u <- qbinom(0.975, V, Rhat_1m) /   (V * Rhat_1m)
-  S_1m.95l <- qbinom(0.025, V, Rhat_1m) /   (V * Rhat_1m)
-  S_1m.99l <- qbinom(0.005, V, Rhat_1m) /   (V * Rhat_1m)
-
-  # extract posteriors of samples for standardized mortality after burnin
-  post.S_1m <- extract(stanresult, pars="S_1m")[[1]]
-  
-  # determine bayesian probabilities based on posteriors
-  bP.S_1m.99u <- vector(mode="numeric",length=14)
-  bP.S_1m.95u <- vector(mode="numeric",length=14)
-  bP.S_1m.95l <- vector(mode="numeric",length=14)
-  bP.S_1m.99l <- vector(mode="numeric",length=14)
-  for (k in 1:14) {
-    bP.S_1m.99u[k] <- sum(post.S_1m[,k] > S_1m.99u[k]) / nrow(post.S_1m)
-    bP.S_1m.95u[k] <- sum(post.S_1m[,k] > S_1m.95u[k]) / nrow(post.S_1m)
-    bP.S_1m.95l[k] <- sum(post.S_1m[,k] < S_1m.95l[k]) / nrow(post.S_1m)
-    bP.S_1m.99l[k] <- sum(post.S_1m[,k] < S_1m.99l[k]) / nrow(post.S_1m)
-  }
-
-  ## two year survival
-
-  # estimate the funnel thresholds for standarized mortality for each center
-  S_2y.99u <- qbinom(0.995, V, Rhat_2y) /   (V * Rhat_2y)
-  S_2y.95u <- qbinom(0.975, V, Rhat_2y) /   (V * Rhat_2y)
-  S_2y.95l <- qbinom(0.025, V, Rhat_2y) /   (V * Rhat_2y)
-  S_2y.99l <- qbinom(0.005, V, Rhat_2y) /   (V * Rhat_2y)
-
-  # extract posteriors of samples for standardized mortality after burnin
-  post.S_2y <- extract(stanresult, pars="S_2y")[[1]]
-  
-  # determine bayesian probabilities based on posteriors
-  bP.S_2y.99u <- vector(mode="numeric",length=14)
-  bP.S_2y.95u <- vector(mode="numeric",length=14)
-  bP.S_2y.95l <- vector(mode="numeric",length=14)
-  bP.S_2y.99l <- vector(mode="numeric",length=14)
-  for (k in 1:14) {
-    bP.S_2y.99u[k] <- sum(post.S_2y[,k] > S_2y.99u[k]) / nrow(post.S_2y)
-    bP.S_2y.95u[k] <- sum(post.S_2y[,k] > S_2y.95u[k]) / nrow(post.S_2y)
-    bP.S_2y.95l[k] <- sum(post.S_2y[,k] < S_2y.95l[k]) / nrow(post.S_2y)
-    bP.S_2y.99l[k] <- sum(post.S_2y[,k] < S_2y.99l[k]) / nrow(post.S_2y)
-  }
-
 # TABLE 1
 
-  mOS <- vector(length=M)
-  for (k in 1:M) {
-    mOS[k] <- myt[min(which(mySurvM[k,] < 0.5))]
-    mOS_all <- mySurv_all
-  }
-  mOS_all <- myt[min(which(mySurv_all < 0.5))]
+   library(survival)
 
+   # calculate median OS per center
+   mysurv <- survfit(Surv(d05$obs_t,d05$ind) ~ d05$ctr)
+   printsurv <- read.table(textConnection(capture.output(mysurv)),skip=2,header=TRUE)
+   mOS <- printsurv[,3]/30
+
+   mymort_1m <- vector(length=M)
+   mysurv_2y <- vector(length=M)
+   for (k in 1:M) {
+     obs_t_tmp <- d05$obs_t[d05$ctr==k]
+     ind_tmp   <- d05$ind[d05$ctr==k]
+     mysurv_tmp <- survfit(Surv(obs_t_tmp,ind_tmp) ~ 1)
+     mymort_1m[k] <- 1 - mysurv_tmp$surv[min(which(mysurv_tmp$time>=30))]
+     mysurv_2y[k] <- mysurv_tmp$surv[min(which(mysurv_tmp$time>=730))]
+   }
+  
   (tab1 <- cbind(
   rbind(
     table(data$id),
@@ -314,9 +277,9 @@
     c(rep("yes",7),rep("no",7)), #table(data$aca,data$id),
     table(data$tos,data$id)[c(2,1),],
     table(data$id,data$tos)[,"biopt"] / rowSums(table(data$id,data$tos)),
-    mOS/30, 
-    O_1m, R_1m, bP.S_1m.99u, bP.S_1m.95u, bP.S_1m.95l, bP.S_1m.99l,
-    O_2y, R_2y, bP.S_2y.99u, bP.S_2y.95u, bP.S_2y.95l, bP.S_2y.99l
+    mOS, 
+    O_1m, mymort_1m,
+    O_2y, mysurv_2y
     ),
   c(nrow(data),
     nrow(data[these.nona,]),
@@ -329,9 +292,9 @@
     7,
     table(data$tos,useNA='ifany')[c(2,1)],
     table(data$tos)["biopt"] / sum(table(data$tos)),
-    mOS_all/30, 
-    O_1m_all, Rhat_1m, NA, NA, NA, NA,
-    O_2y_all, Rhat_2y, NA, NA, NA, NA    
+    mOS_all, 
+    O_1m_all, 1 - mySurv_all[min(which(myt>=30))], 
+    O_2y_all, mySurv_all[min(which(myt>=730))]    
     )
   ))
   colnames(tab1) <- c(letters[1:14], "Overall")
@@ -348,16 +311,8 @@
     "median overall survival in months",
     "observed number of deaths at one month", 
     "mortality at one month",
-    "probability of early mortality being above funnel 99% confidence limits",
-    "probability of early mortality being above funnel 95% confidence limits",
-    "probability of early mortality being below funnel 95% confidence limits",
-    "probability of early mortality being below funnel 99% confidence limits",
     "observed number of survivors at two years", 
-    "survival at two late years",
-    "probability of late survival being above funnel 99% confidence limits",
-    "probability of late survival being above funnel 95% confidence limits",
-    "probability of late survival being below funnel 95% confidence limits",
-    "probability of late survival being below funnel 99% confidence limits"
+    "survival at two years",
   )
   write.table(tab1,"table1.txt",sep="\t")
 
@@ -498,7 +453,7 @@
     E  = E_1m,
     SR = S_1m,
     N  = V)
-  lsmr <- do.binomlimits(Rhat_1m)
+  lsmr <- do.poissonlimits(Rhat_1m)
   min(dsmr$E); max(dsmr$E)
   min(log(dsmr$SR)); max(log(dsmr$SR))
 
@@ -506,7 +461,7 @@
     E  = E_2y,
     SR = S_2y,
     N  = V)
-  lssr <- do.binomlimits(Rhat_2y)
+  lssr <- do.poissonlimits(Rhat_2y)
   min(dssr$E); max(dssr$E)
   min(log(dssr$SR)); max(log(dssr$SR))
 
